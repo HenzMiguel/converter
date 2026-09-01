@@ -1,0 +1,258 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
+  <meta
+    name="description"
+    content="Converta imagens e vídeos para diferentes formatos."
+  >
+
+  <title>Conversor de mídia</title>
+
+  <link
+    href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css"
+    rel="stylesheet"
+    type="text/css"
+  >
+
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="min-h-screen bg-base-200 text-base-content">
+  <main class="mx-auto flex min-h-screen max-w-xl items-center px-4 py-8 sm:py-12">
+    <div class="w-full">
+
+      <!-- Cabeçalho -->
+      <header class="mb-6 text-center">
+
+        <h1 class="text-5xl font-bold tracking-tight">
+          Conversor de mídia
+        </h1>
+
+        <p class="mt-3 text-lg text-base-content/70">
+          Envie uma imagem ou vídeo e escolha o formato de saída.
+        </p>
+      </header>
+
+      <!-- Feedback de erro e sucesso: exibidos em modal pelo static/app.js -->
+
+      <!-- Conversor -->
+      <form
+        id="convertForm"
+        action="/convert"
+        method="post"
+        enctype="multipart/form-data"
+        class="card border border-base-300 bg-base-100 shadow-sm"
+      >
+        <div class="card-body gap-6 p-5 sm:p-7">
+
+          <!-- Arquivo -->
+          <div>
+            <label
+              for="file"
+              class="mb-2 block font-medium"
+            >
+              Arquivo
+            </label>
+
+            <input
+              type="file"
+              id="file"
+              name="file"
+              accept="image/*,video/*"
+              class="file-input file-input-bordered w-full"
+              aria-describedby="fileName"
+              required
+            >
+
+            <div class="mt-2 flex flex-wrap justify-between gap-1 text-xs text-base-content/60">
+              <p id="fileName" aria-live="polite">
+                Nenhum arquivo selecionado
+              </p>
+
+              <p>
+                Imagem ou vídeo
+              </p>
+            </div>
+          </div>
+
+          <!-- Formato de saída -->
+          <div>
+            <label
+              for="format"
+              class="mb-2 block font-medium"
+            >
+              Converter para
+            </label>
+
+            <input
+              type="text"
+              id="formatSearch"
+              class="input input-bordered input-sm mb-2 w-full"
+              placeholder="Buscar formato..."
+              autocomplete="off"
+            >
+
+            <select
+              id="format"
+              name="format"
+              class="select select-bordered w-full"
+              required
+            >
+              {{range .Formats}}
+                <option
+                  value="{{.Value}}"
+                  data-category="{{.Category}}"
+                  {{if eq .Value $.DefaultTo}}selected{{end}}
+                >
+                  {{.Value}}
+                </option>
+              {{end}}
+            </select>
+          </div>
+
+          <!--
+            Mantido para compatibilidade com o app.js e com as
+            descrições dos formatos, mas não precisa aparecer na UI.
+          -->
+          <select
+            id="from"
+            class="hidden"
+            tabindex="-1"
+            aria-hidden="true"
+          >
+            {{range .Formats}}
+              <option
+                value="{{.Value}}"
+                data-category="{{.Category}}"
+                {{if eq .Value $.DefaultFrom}}selected{{end}}
+              >
+                {{.Value}}
+              </option>
+            {{end}}
+          </select>
+
+          <!-- Ação principal -->
+          <button
+            id="submitButton"
+            type="submit"
+            class="btn btn-primary btn-block"
+          >
+            Converter arquivo
+          </button>
+
+          <p class="text-center text-xs text-base-content/60">
+            O download será liberado quando a conversão terminar.
+          </p>
+        </div>
+      </form>
+
+      <!-- Informações secundárias -->
+      <details
+        class="collapse collapse-arrow mt-4 border border-base-300 bg-base-100"
+      >
+        <summary class="collapse-title min-h-0 py-4 font-medium">
+          Sobre os formatos
+        </summary>
+
+        <div class="collapse-content">
+          <div class="grid gap-3 sm:grid-cols-2">
+
+            <article class="rounded-box bg-base-200 p-4">
+              <p class="text-xs font-medium uppercase tracking-wide text-base-content/50">
+                Entrada
+              </p>
+
+              <h2
+                id="fromTitle"
+                class="mt-1 text-lg font-semibold"
+              >
+                {{.DefaultFrom}}
+              </h2>
+
+              <p
+                id="fromDescription"
+                class="mt-2 text-sm text-base-content/70"
+              >
+                Carregando descrição...
+              </p>
+
+              <a
+                id="fromLink"
+                href="#"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="link link-primary mt-3 inline-block text-sm"
+              >
+                Saiba mais
+              </a>
+            </article>
+
+            <article class="rounded-box bg-base-200 p-4">
+              <p class="text-xs font-medium uppercase tracking-wide text-base-content/50">
+                Saída
+              </p>
+
+              <h2
+                id="toTitle"
+                class="mt-1 text-lg font-semibold"
+              >
+                {{.DefaultTo}}
+              </h2>
+
+              <p
+                id="toDescription"
+                class="mt-2 text-sm text-base-content/70"
+              >
+                Carregando descrição...
+              </p>
+
+              <a
+                id="toLink"
+                href="#"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="link link-primary mt-3 inline-block text-sm"
+              >
+                Saiba mais
+              </a>
+            </article>
+
+          </div>
+        </div>
+      </details>
+    </div>
+  </main>
+
+  <script src="/static/app.js"></script>
+
+  <dialog id="loadingModal" class="modal">
+    <div class="modal-box flex flex-col items-center gap-4 text-center">
+      <span class="loading loading-spinner loading-lg text-primary" aria-hidden="true"></span>
+      <p class="font-medium">Convertendo arquivo...</p>
+    </div>
+  </dialog>
+
+  <dialog id="resultModal" class="modal">
+    <div class="modal-box text-center">
+      <h3 id="resultTitle" class="text-lg font-bold"></h3>
+      <p id="resultMessage" class="py-4 text-sm text-base-content/70"></p>
+      <a id="downloadButton" href="#" class="btn btn-primary hidden" download>
+        Baixar arquivo
+      </a>
+      <div class="modal-action justify-center">
+        <form method="dialog">
+          <button class="btn">Fechar</button>
+        </form>
+      </div>
+    </div>
+  </dialog>
+
+</body>
+</html>
