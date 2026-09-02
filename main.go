@@ -17,7 +17,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	gowiki "github.com/trietmn/go-wiki"
@@ -90,40 +89,45 @@ type formatInfo struct {
 	Category string `json:"category"`
 }
 
-var (
-	wikiCacheMu sync.RWMutex
-	wikiCache   = map[string]formatInfo{}
+// go-wiki's internal cache is not safe for concurrent use, so requests to it
+// are funneled through a single worker goroutine, which also owns the
+// description cache below (no mutex needed since only it touches the map).
+var wikiRequests = make(chan wikiRequest)
 
-	// go-wiki's internal cache is not safe for concurrent use, so requests to it
-	// are funneled through a single worker goroutine via this channel.
-	wikiRequests = make(chan wikiRequest)
-)
-
-// wikiRequest asks the wiki worker goroutine for a title's summary and
+// wikiRequest asks the wiki worker goroutine for a format's description and
 // delivers the result back on resp.
 type wikiRequest struct {
-	title string
-	resp  chan wikiSummaryResult
+	format string
+	meta   formatMeta
+	resp   chan formatInfo
 }
 
-type wikiSummaryResult struct {
-	extract string
-	err     error
-}
-
-// wikiWorker serializes all go-wiki calls onto a single goroutine.
+// wikiWorker serializes all go-wiki calls onto a single goroutine and owns
+// the in-memory description cache exclusively.
 func wikiWorker() {
+	cache := map[string]formatInfo{}
 	for req := range wikiRequests {
-		extract, err := gowiki.Summary(req.title, 3, -1, true, true)
-		req.resp <- wikiSummaryResult{extract: extract, err: err}
+		if info, ok := cache[req.format]; ok {
+			req.resp <- info
+			continue
+		}
+
+		extract, err := gowiki.Summary(req.meta.WikiTitle, 3, -1, true, true)
+		if err != nil {
+			log.Printf("erro ao buscar descrição de %s: %v", req.meta.WikiTitle, err)
+			extract = "Descrição indisponível no momento."
+		}
+
+		info := formatInfo{Title: req.meta.WikiTitle, Extract: extract, URL: wikipediaURL(req.meta.WikiTitle), Category: req.meta.Category}
+		cache[req.format] = info
+		req.resp <- info
 	}
 }
 
-func fetchWikiSummary(title string) (string, error) {
-	resp := make(chan wikiSummaryResult)
-	wikiRequests <- wikiRequest{title: title, resp: resp}
-	result := <-resp
-	return result.extract, result.err
+func fetchWikiInfo(format string, meta formatMeta) formatInfo {
+	resp := make(chan formatInfo)
+	wikiRequests <- wikiRequest{format: format, meta: meta, resp: resp}
+	return <-resp
 }
 
 func main() {
@@ -274,25 +278,7 @@ func handleFormatInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	wikiCacheMu.RLock()
-	cached, found := wikiCache[format]
-	wikiCacheMu.RUnlock()
-	if found {
-		writeJSON(w, cached)
-		return
-	}
-
-	extract, err := fetchWikiSummary(meta.WikiTitle)
-	if err != nil {
-		log.Printf("erro ao buscar descrição de %s: %v", meta.WikiTitle, err)
-		extract = "Descrição indisponível no momento."
-	}
-
-	info := formatInfo{Title: meta.WikiTitle, Extract: extract, URL: wikipediaURL(meta.WikiTitle), Category: meta.Category}
-	wikiCacheMu.Lock()
-	wikiCache[format] = info
-	wikiCacheMu.Unlock()
-	writeJSON(w, info)
+	writeJSON(w, fetchWikiInfo(format, meta))
 }
 
 func wikipediaURL(title string) string {

@@ -1,0 +1,7 @@
+.git
+uploads/*
+output/*
+!uploads/.gitkeep
+!output/.gitkeep
+converter
+*.exe
