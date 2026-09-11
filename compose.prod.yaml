@@ -1,6 +1,6 @@
 services:
   converter:
-    image: ghcr.io/henzmiguel/SEU_REPOSITORIO:latest
+    image: ghcr.io/henzmiguel/converter:latest
     container_name: converter
     restart: unless-stopped
 
