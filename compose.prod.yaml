@@ -1,0 +1,11 @@
+services:
+  converter:
+    image: ghcr.io/henzmiguel/SEU_REPOSITORIO:latest
+    container_name: converter
+    restart: unless-stopped
+
+    ports:
+      - "8082:8082"
+
+    environment:
+      PORT: "8082"
